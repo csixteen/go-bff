@@ -109,7 +109,7 @@ func loadCode(fileName string) []byte {
 	}
 	var contents []byte
 	for _, char := range c {
-		if _, ok := OPERATORS[char]; ok {
+		if OPERATORS[char] {
 			contents = append(contents, char)
 		}
 	}
