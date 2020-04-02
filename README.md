@@ -1,2 +1,21 @@
 # go-bff
-I don't know Go. So I decided to try and make a port of my [original](https://github.com/csixteen/useless/blob/master/py-brainfuck_v2.py) Python Brainf`*`ck interpreter to Go, just for the fun. I'm pretty sure it can be improved, so I'll probably do it whenever I have time to dedicate to useless projects.
+
+Simple [Brainfuck](https://esolangs.org/wiki/Brainfuck) interpreter written in Go.
+
+## Building
+
+```
+$ make release
+```
+
+## Testing
+
+```
+$ make test
+go run main.go tests/hello2.bf
+Hello, world!
+go run main.go tests/hello.bf
+Hello, world!
+[test] finished!
+```
+

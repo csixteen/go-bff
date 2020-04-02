@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 )
 
 const MEM_SIZE = 30000
@@ -23,76 +22,130 @@ var OPERATORS = map[byte]bool{
 	']': true,
 }
 
-type Stack []int
-
-func (s Stack) Push(v int) Stack {
-	return append(s, v)
-}
-
-func (s Stack) Pop() (Stack, int, error) {
-	l := len(s)
-	if l == 0 {
-		return s, -1, errors.New("Empty stack")
-	}
-	return s[:l-1], s[l-1], nil
-}
-
 func readChar() byte {
 	reader := bufio.NewReader(os.Stdin)
 	input, _ := reader.ReadString('\n')
 	return []byte(input)[0]
 }
 
-func executeInstruction(code []byte, ip int, stack Stack, mem []byte, cursor int) (Stack, int, int) {
-	op := code[ip]
+// ------------------------------------------------------------------
+// `Stack` structure and methods
+
+type stack struct {
+	s []int
+}
+
+func NewStack() *stack {
+	return &stack{
+		s: make([]int, 0),
+	}
+}
+
+func (s *stack) Push(v int) {
+	s.s = append(s.s, v)
+}
+
+func (s *stack) Pop() (int, error) {
+	l := len(s.s)
+	if l == 0 {
+		return -1, errors.New("Empty Stack")
+	}
+
+	res := s.s[l-1]
+	s.s = s.s[:l-1]
+	return res, nil
+}
+
+func (s *stack) Top() (int, error) {
+	l := len(s.s)
+	if l == 0 {
+		return -1, errors.New("Empty Stack")
+	}
+
+	return s.s[l-1], nil
+}
+
+// -------------------------------------------------------------------
+// `Program` structure and methods
+
+type Program struct {
+	Code   []byte // Brainfuck code
+	Ip     int    // Instruction pointer
+	Cursor int    // Memory cursor
+	Stack  *stack // Program stack
+	Cells  []byte // Cells
+}
+
+func NewProgram(code []byte, n int) *Program {
+	return &Program{
+		Code:   code,
+		Ip:     0,
+		Cursor: 0,
+		Stack:  NewStack(),
+		Cells:  make([]byte, n),
+	}
+}
+
+func (p *Program) executeInstruction() {
 	offset := 1
 
-	switch op {
+	switch p.Code[p.Ip] {
 	case '>':
-		cursor += 1
+		p.Cursor += 1
 	case '<':
-		cursor -= 1
+		p.Cursor -= 1
 	case '+':
-		mem[cursor] += 1
+		p.Cells[p.Cursor] += 1
 	case '-':
-		mem[cursor] -= 1
+		p.Cells[p.Cursor] -= 1
 	case ',':
-		mem[cursor] = readChar()
+		p.Cells[p.Cursor] = readChar()
 	case '.':
-		fmt.Printf("%c", mem[cursor])
+		fmt.Printf("%c", p.Cells[p.Cursor])
 	case '[':
-		if mem[cursor] > 0 {
-			stack = stack.Push(ip)
+		if p.Cells[p.Cursor] > 0 {
+			p.Stack.Push(p.Ip)
 		} else {
-			if len(stack) > 0 {
-				stack, _, _ = stack.Pop()
+			i := p.Ip + 1
+			skipped := 0
+
+			for i < len(p.Code) {
+				switch p.Code[i] {
+				case '[':
+					skipped += 1
+				case ']':
+					if skipped == 0 {
+						i += 1
+						break
+					} else {
+						skipped -= 1
+					}
+				}
+
+				i += 1
 			}
-			offset = strings.Index(string(code[ip+1:]), "]")
-			if offset == -1 {
-				panic("malformed program")
-			}
+
+			offset = i - p.Ip
 		}
 	case ']':
-		if mem[cursor] == 0 {
-			stack, _, _ = stack.Pop()
+		if p.Cells[p.Cursor] == 0 {
+			p.Stack.Pop()
 		} else {
-			stack, offset, _ = stack.Pop()
-			offset -= ip
+			top, _ := p.Stack.Top()
+			offset = top - p.Ip + 1
 		}
 	}
 
-	return stack, ip + offset, cursor
+	p.Ip += offset
 }
 
-func execute(code []byte) {
-	memory := make([]byte, MEM_SIZE)
-	cursor := 0 // memory cursor
-	stack := make(Stack, 0)
-	ip := 0 // Instruction Pointer
-	for ip < len(code) {
-		stack, ip, cursor = executeInstruction(code, ip, stack, memory, cursor)
+func (p *Program) execute() {
+	for p.Ip < len(p.Code) {
+		p.executeInstruction()
 	}
 }
+
+// --------------------------------------------------------------
 
 // Loads code from file and returns byte array that
 // only contains valid Brainfuck operators.
@@ -103,12 +156,12 @@ func loadCode(fileName string) []byte {
 	}
 	defer f.Close()
 
-	c, err := ioutil.ReadAll(f)
+	code, err := ioutil.ReadAll(f)
 	if err != nil {
 		log.Fatal(err)
 	}
 	var contents []byte
-	for _, char := range c {
+	for _, char := range code {
 		if OPERATORS[char] {
 			contents = append(contents, char)
 		}
@@ -116,9 +169,14 @@ func loadCode(fileName string) []byte {
 	return contents
 }
 
+// ---------------------------------------------------------------
+
+// Entry point
 func main() {
 	if len(os.Args) != 2 {
 		panic("Usage: <program> <file.bf>")
 	}
-	execute(loadCode(os.Args[1]))
+
+	p := NewProgram(loadCode(os.Args[1]), MEM_SIZE)
+	p.execute()
 }
